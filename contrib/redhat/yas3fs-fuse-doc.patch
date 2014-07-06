@@ -1,0 +1,14 @@
+--- ./README.fuse	2014-07-06 16:22:48.242705878 +0200
++++ ./README.fuse.new 2014-07-06 16:17:44.786455403 +0200
+@@ -0,0 +1,10 @@
++If you run yas3fs via a non-root system user
++then you need to create the following file.
++The file is missing in the 'fuse' rpm package.
++
++	/etc/fuse.conf
++
++The fuse config file must have the following option in it.
++
++	user_allow_other
++
+

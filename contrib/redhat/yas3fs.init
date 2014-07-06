@@ -1,0 +1,160 @@
+#!/bin/sh
+#
+#   Startup/shutdown script for yas3fs
+#
+#   Linux chkconfig stuff:
+#
+#   chkconfig: 2345 99 10
+#   description: Startup/shutdown script for \
+#                yas3fs
+#
+
+# Source function library.
+. /etc/init.d/functions
+
+# Source configuration file (we set some env variables there)
+if [ -f /etc/sysconfig/yas3fs ] ; then
+	. /etc/sysconfig/yas3fs
+fi
+
+prog=yas3fs
+pidfile="/var/run/$prog.pid"
+lockfile=/var/lock/subsys/$prog
+USER=yas3fs
+
+# Generate one variable from the various configurable options in sysconfig
+YAS3FS_OPTS=""
+[ -n "$YAS3FS_OPTIONS" ] && YAS3FS_OPTS="${YAS3FS_OPTS} ${YAS3FS_OPTIONS}"
+[ -n "${YAS3FS_PATH}" ] && YAS3FS_OPTS="${YAS3FS_OPTS} ${YAS3FS_PATH}"
+[ -n "$YAS3FS_CACHEPATH" ] && YAS3FS_OPTS="${YAS3FS_OPTS} --cache-path ${YAS3FS_CACHEPATH}"
+[ -n "$YAS3FS_TOPIC" ] && YAS3FS_OPTS="${YAS3FS_OPTS} --topic ${YAS3FS_TOPIC}"
+[ -n "$YAS3FS_OTHER_OPTIONS" ] && YAS3FS_OPTS="${YAS3FS_OPTS} ${YAS3FS_OTHER_OPTIONS}"
+
+# Check if AWS access keys are set. If not stop.
+if [ ${AWS_ACCESS_KEY_ID}_ = _ -o ${AWS_SECRET_ACCESS_KEY}_ = _ ]; then
+	echo "Please configure AWS credentials in '/etc/sysconfig/yas3fs'"
+	echo
+	exit 1
+fi
+
+# Check if S3 bucked and local path are configured. If not stop.
+if [ ${YAS3FS_S3BUCKET}_ = _ -o ${YAS3FS_LOCALPATH}_ = _ ]; then
+	echo "Please configure both options YAS3FS_S3BUCKET and YAS3FS_LOCALPATH"
+	echo
+	exit 1
+fi
+
+rhstatus(){
+    status -p $pidfile $prog
+    RETVAL=$?
+    return $RETVAL
+}
+
+# Check if the yas3fs is already running. Used by start/stop options
+status -p $pidfile -l $(basename $lockfile) $prog >/dev/null 2>&1
+running=$?
+
+# Check if the yas3fs is still running. Used during stopping.
+checkrunning()
+{
+        pid=$(pidofproc $prog 2>/dev/null)
+        RETVAL=$?
+        if [ $RETVAL -ne 0 ]; then
+                echo "$1 is stopped"
+        else
+                echo "$1 (pid $pid) is running..."
+        fi
+        return $RETVAL
+}
+
+# Check the group ownership and the group permissions of the configured local mount point
+# If they are not correct, exit and do not continue
+permCheck() {
+	[ -d ${YAS3FS_LOCALMOUNT} ] && DIRGROUP=$(stat -c "%G" ${YAS3FS_LOCALMOUNT})
+	if [ ${DIRGROUP}_ = yas3fs_ ]; then
+		RVDG=OK
+	else
+		RVDG=NOTOK
+	fi
+
+	[ -d ${YAS3FS_LOCALMOUNT} ] && DIRPERMS=$(stat -c "%a" ${YAS3FS_LOCALMOUNT} | grep ".[67].")
+	RETVAL=$?
+	if [ ${RETVAL}_ = 0_ ]; then
+		RVDP=OK
+	else
+		RVDP=NOTOK 
+	fi
+
+	if [ ${RVDG} != OK -o ${RVDP} != OK ]; then
+		echo "Please check permissions for '${YAS3FS_LOCALMOUNT}'"
+		echo
+		exit 1
+	fi
+}
+
+start () {
+	permCheck
+
+	# start daemon
+	echo -n $"Starting $prog: "
+	daemon --user $USER "$prog ${YAS3FS_OPTS}"
+        RETVAL=$?
+	sleep 2
+	echo
+	echo $(pidofproc $prog) > $pidfile
+	[ $RETVAL = 0 ] && touch $lockfile
+	return $RETVAL
+}
+
+stop () {
+	# stop daemon
+	echo -n $"Stopping $prog: "
+        kill -TERM $(pidofproc $prog) > /dev/null 2>&1
+	echo_success
+        echo
+
+        echo -n "Waiting for $prog to stop:"
+        while checkrunning $prog > /dev/null 2>&1; do
+                sleep 1
+                echo -n "."
+        done
+	RETVAL=$?
+
+	echo_success
+        echo
+
+	[ $RETVAL = 0 ] && rm -f $lockfile && rm -f $pidfile
+}
+
+restart() {
+	stop
+	start
+}
+
+case $1 in
+	start)
+		[ $running -eq 0 ] && exit 0
+		start
+	;;
+	stop)
+		[ $running -eq 0 ] || exit 0
+		stop
+	;;
+	restart)
+		restart
+	;;
+	condrestart)
+		[ -f /var/lock/subsys/$prog ] && restart || :
+	;;
+	status)
+		rhstatus
+		RETVAL=$?
+	;;
+	*)
+
+	echo $"Usage: $prog {start|stop|restart|condrestart|status}"
+	exit 3
+esac
+
+exit $RETVAL
+

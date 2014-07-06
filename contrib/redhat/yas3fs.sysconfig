@@ -1,0 +1,34 @@
+
+# AWS credentials
+export AWS_ACCESS_KEY_ID=""
+export AWS_SECRET_ACCESS_KEY=""
+
+# AWS S3 bucket
+YAS3FS_S3BUCKET=""
+
+# Local mount path
+YAS3FS_LOCALPATH=""
+
+# AWS topic
+YAS3FS_TOPIC=""
+
+# Log file
+# If you change it, make sure the path exists and is writable by the yas3fs user
+YAS3FS_OPTIONS="-l /var/log/yas3fs/yas3fs.log"
+
+# All other options you want to pass to the yas3fs daemon
+# Add here all other options that you want to change from their defaults
+YAS3FS_OTHER_OPTIONS="--recheck-s3 --cache-on-disk 0 --new-queue"
+
+# --------------------------------------------------
+# Normally you do not need to touch the below
+
+# Full local mount point
+YAS3FS_LOCALMOUNT="${YAS3FS_LOCALPATH}/${YAS3FS_S3BUCKET}"
+
+# S3 bucket path and local mount point
+YAS3FS_PATH="s3://${YAS3FS_S3BUCKET} ${YAS3FS_LOCALMOUNT}"
+
+# yas3fs cache directory
+YAS3FS_CACHEPATH="/var/lib/yas3fs/${YAS3FS_S3BUCKET}"
+
