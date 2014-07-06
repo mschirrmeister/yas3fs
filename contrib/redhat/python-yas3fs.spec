@@ -4,35 +4,35 @@
 %{!?python2_sitearch: %global python2_sitearch %(%{__python2} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1))")}
 %endif
 
-%global upstream_name yas3fs
-%define yas3fs_logdir    %{_localstatedir}/log/yas3fs
+%global	upstream_name	yas3fs
+%define	yas3fs_logdir	%{_localstatedir}/log/yas3fs
 
-Name:           python-%{upstream_name}
-Version:        2.2.16
-Release:        4%{?dist}
-Summary:        AWS S3 Filesystem
+Name:			python-%{upstream_name}
+Version:		2.2.16
+Release:		4%{?dist}
+Summary:		AWS S3 Filesystem
 
-Group:          Development/Languages
-License:        MIT
-URL:            https://github.com/danilop/yas3fs
-Source0:	https://pypi.python.org/packages/source/y/%{upstream_name}/%{upstream_name}-%{version}.tar.gz
-Source1:	yas3fs.init
-Source2:	yas3fs.sysconfig
+Group:			Development/Languages
+License:		MIT
+URL:			https://github.com/danilop/yas3fs
+Source0:		https://pypi.python.org/packages/source/y/%{upstream_name}/%{upstream_name}-%{version}.tar.gz
+Source1:		yas3fs.init
+Source2:		yas3fs.sysconfig
 
-Patch1:		yas3fs-fuse-doc.patch
+Patch1:			yas3fs-fuse-doc.patch
 
-BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+BuildRoot:		%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildArch:      noarch
-BuildRequires:  python-devel
+BuildArch:		noarch
+BuildRequires:	python-devel
 
-Requires:	python-argparse
+Requires:		python-argparse
 # yas3fs "python requires" file says that python-setuptools 2.2 is needed. EL6 does not come with this version.
 # It works with 0.6.10 too
-Requires:	python-setuptools >= 0.6.10
-Requires:	python-boto >= 2.25.0
-Requires:	python-fusepy >= 2.0.2
-Requires:	fuse, fuse-libs
+Requires:		python-setuptools >= 0.6.10
+Requires:		python-boto >= 2.25.0
+Requires:		python-fusepy >= 2.0.2
+Requires:		fuse, fuse-libs
 
 
 %description
@@ -43,7 +43,6 @@ Filesystem in Userspace (FUSE) interface to Amazon S3.
 %setup -q -n %{upstream_name}-%{version}
 
 # Create readme file for fuse
-#%patch1 -p1 -b .fuse
 %patch1 -p1 -b .fusedoc
 
 %build
@@ -101,9 +100,9 @@ rm -rf %{buildroot}
 %files
 %defattr(-,root,root,-)
 %doc README.fuse
+#%doc CHANGES LICENSE README.md
 %config %{_sysconfdir}/rc.d/init.d/yas3fs
 %config(noreplace) %{_sysconfdir}/sysconfig/yas3fs
-#%doc CHANGES LICENSE README.md
 %{_bindir}/yas3fs
 %{python2_sitelib}/%{upstream_name}
 %{python2_sitelib}/%{upstream_name}-%{version}-*.egg-info
