@@ -1,5 +1,7 @@
 ### Yet Another S3-backed File System: yas3fs
 
+[![Join the chat at https://gitter.im/danilop/yas3fs](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/danilop/yas3fs?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 YAS3FS (Yet Another S3-backed File System) is a [Filesystem in Userspace (FUSE)](http://fuse.sourceforge.net)
 interface to [Amazon S3](http://aws.amazon.com/s3/).
 It was inspired by [s3fs](http://code.google.com/p/s3fs/) but rewritten from scratch to implement
@@ -27,7 +29,7 @@ This is a personal project. No relation whatsoever exists between this project a
 
 ### License
 
-Copyright (c) 2012-2013 Danilo Poccia, http://blog.danilopoccia.net
+Copyright (c) 2012-2014 Danilo Poccia, http://danilop.net
 
 This code is licensed under the The MIT License (MIT). Please see the LICENSE file that accompanies this project for the terms of use.
 
@@ -35,7 +37,7 @@ This code is licensed under the The MIT License (MIT). Please see the LICENSE fi
 
 This is the logical architecture of yas3fs:
 
-![yas3fs Logical Architecture](http://blog.danilopoccia.net/wp-content/uploads/sites/2/2012/11/yas3fs.png.scaled500.png)
+![yas3fs Logical Architecture](http://danilopoccia.s3.amazonaws.com/YAS3FS/yas3fs.png)
 
 I strongly suggest to start yas3fs for the first time with the `-df` (debug + foreground) options, to see if there is any error.
 When everything works it can be interrupted (with `^C`) and restarted to run in background
@@ -65,10 +67,14 @@ within an [Auto Scaling](http://aws.amazon.com/autoscaling/) group.
 
 ### Quick Installation
 
+#### WARNING: PIP installation is no longer supported. Use "git clone" instead.
+
 Requires [Python](http://www.python.org/download/) 2.6 or higher.
 Install using [pip](http://www.pip-installer.org/en/latest/).
 
     pip install yas3fs
+
+If it fails, check the CentOS 6 installation steps below.
 
 If you want to do a quick test here's the installation procedure depending on the OS flavor (Linux or Mac):
 
@@ -116,6 +122,40 @@ Install FUSE for OS X from <http://osxfuse.github.com>.
     # For multiple hosts mount
     yas3fs s3://BUCKET/PATH LOCAL-PATH --topic TOPIC-ARN --new-queue
 
+**On CentOS 6**
+
+    sudo yum -y install fuse fuse-libs centos-release-scl
+    sudo yum -y install python27
+    # upgrade setuptools
+    scl enable python27 -- pip install setuptools --upgrade
+    # grab the latest sources
+    git clone https://github.com/danilop/yas3fs.git
+    cd yas3fs
+    scl enable python27 -- python setup.py install
+    scl enable python27 -- yas3fs -h # See the usage
+    mkdir LOCAL-PATH
+    # For single host mount
+    scl enable python27 -- yas3fs s3://BUCKET/PATH LOCAL-PATH
+    # For multiple hosts mount
+    scl enable python27 -- yas3fs s3://BUCKET/PATH LOCAL-PATH --topic TOPIC-ARN --new-queue
+
+**/etc/fstab support**
+
+    # Put contrib/mount.yas3fs to /usr/local/sbin and make the symlink
+    chmod +x /usr/local/sbin/mount.yas3fs
+    cd /sbin; sudo ln -s /usr/local/sbin/mount.yas3fs.centos6 # replace centos6 to amzn1 for Amazon Linux installation
+    # Add the contents of contrib/fstab.snippet to /etc/fstab and modify accordingly
+    # Try to mount
+    mount /mnt/mybucket
+
+**Workaround to unmount yas3fs correctly during host shutdown or reboot**
+
+    sudo cp contrib/unmount-yas3fs.init.d /etc/init.d/unmount-yas3fs
+    sudo chmod +x /etc/init.d/unmount-yas3fs
+    sudo chkconfig --add unmount-yas3fs
+    sudo chkconfig unmount-yas3fs on
+    sudo /etc/init.d/unmount-yas3fs start
+
 To listen to SNS HTTP notifications (I usually suggest to use SQS instead) with a Mac
 you need to install the Python [M2Crypto](http://chandlerproject.org/Projects/MeTooCrypto) module,
 download the most suitable "egg" from
@@ -130,23 +170,42 @@ If something does not work as expected you can use the `-df` options to run in f
 To unmount the file system on Linux:
 
     fusermount -u LOCAL-PATH
+    or
+    umount LOCAL-PATH
+
+The latter works if /etc/fstab support steps (see above) were completed
 
 To unmount the file system on a Mac you can use `umount`.
+
+**rsync usage**
+
+rsync's option *--inplace* has to be used to avoid S3 busy events
 
 ### Full Usage
 
     yas3fs -h
 
     usage: yas3fs [-h] [--region REGION] [--topic ARN] [--new-queue]
-                  [--queue NAME] [--queue-wait N] [--queue-polling N]
+                  [--new-queue-with-hostname] [--queue NAME] 
+                  [--queue-wait N] [--queue-polling N] [--nonempty]
                   [--hostname HOSTNAME] [--use-ec2-hostname] [--port N]
                   [--cache-entries N] [--cache-mem-size N] [--cache-disk-size N]
-                  [--cache-path PATH] [--cache-on-disk N] [--cache-check N]
-                  [--s3-num N] [--download-num N] [--prefetch-num N]
+                  [--cache-path PATH] [--recheck-s3] [--cache-on-disk N] [--cache-check N]
+                  [--s3-num N] [--download-num N] [--prefetch-num N] [--st-blksize N]
                   [--buffer-size N] [--buffer-prefetch N] [--no-metadata]
                   [--prefetch] [--mp-size N] [--mp-num N] [--mp-retries N]
+                  [--s3-retries N] [--s3-retries-sleep N] 
+                  [--s3-use-sigv4] [--s3-endpoint URI]
+                  [--aws-managed-encryption] 
+                  [--no-allow-other]
+                  [--download-retries-num N] [--download-retries-sleep N]
+                  [--read-retries-num N] [--read-retries-sleep N]
                   [--id ID] [--mkdir] [--uid N] [--gid N] [--umask MASK]
-                  [--expiration N] [-l FILE] [-f] [-d] [-V]
+                  [--read-only] [--expiration N] [--requester-pays]
+                  [--with-plugin-file FILE] [--with-plugin-class CLASS]
+                  [-l FILE] 
+                  [--log-mb-size N] [--log-backup-count N] [--log-backup-gzip]
+                  [-f] [-d] [-V]
                   S3Path LocalPath
 
     YAS3FS (Yet Another S3-backed File System) is a Filesystem in Userspace (FUSE)
@@ -183,6 +242,10 @@ To unmount the file system on a Mac you can use `umount`.
                            listen to SNS notifications, overrides --queue, queue
                            name is BUCKET-PATH-ID with alphanumeric characters
                            only
+      --new-queue-with-hostname
+                           create a new SQS queue with hostname in queuename,
+                           overrides --queue, queue name is BUCKET-PATH-ID with
+                           alphanumeric characters only
       --queue NAME         SQS queue name to listen to SNS notifications, a new
                            queue is created if it doesn't exist
       --queue-wait N       SQS queue wait time in seconds (using long polling, 0
@@ -198,15 +261,27 @@ To unmount the file system on a Mac you can use `umount`.
       --cache-mem-size N   max size of the memory cache in MB (default is 128 MB)
       --cache-disk-size N  max size of the disk cache in MB (default is 1024 MB)
       --cache-path PATH    local path to use for disk cache (default is
-                           /tmp/yas3fs/BUCKET/PATH)
+                           /tmp/yas3fs-BUCKET-PATH-random)
+      --recheck-s3         Cache ENOENT results in forced recheck of S3 for new file/directory
       --cache-on-disk N    use disk (instead of memory) cache for files greater
                            than the given size in bytes (default is 0 bytes)
       --cache-check N      interval between cache size checks in seconds (default
                            is 5 seconds)
+      --s3-endpoint        the S3 endpoint URI, only required if using --s3-use-sigv4
       --s3-num N           number of parallel S3 calls (0 to disable writeback,
                            default is 32)
+      --s3-retries N       number of retries for s3 write operations (default 3)
+      --s3-retries-sleep N  number of seconds between retries for s3 write operations (default 1)
+      --s3-use-sigv4       use signature version 4 signing process, required to connect
+                           to some newer AWS regions. --s3-endpoint must also be set
       --download-num N     number of parallel downloads (default is 4)
+      --download-retries-num N max number of retries when downloading (default is 60)
+      --download-retries-sleep N how long to sleep in seconds between download retries (default is 1)
+      --read-retries-num N max number of retries when read() is invoked (default is 10)
+      --read-retries-sleep N how long to sleep in seconds between read() retries (default is 1)
       --prefetch-num N     number of parallel prefetching downloads (default is 2)
+      --st-blksize N       st_blksize to return to getattr() callers in bytes, optional
+      --nonempty           allows mounts over a non-empty file or directory
       --buffer-size N      download buffer size in KB (0 to disable buffering,
                            default is 10240 KB)
       --buffer-prefetch N  number of buffers to prefetch (default is 0)
@@ -222,6 +297,8 @@ To unmount the file system on a Mac you can use `umount`.
                            disable multipart upload, default is 4)
       --mp-retries N       max number of retries in uploading a part (default is
                            3)
+      --aws-managed-encryption  Enable AWS managed encryption (sets header x-amz-server-side-encryption = AES256)
+      --no-allow-other     do not allow other users to access this bucket
       --id ID              a unique ID identifying this node in a cluster (default
                            is a UUID)
       --mkdir              create mountpoint if not found (and create intermediate
@@ -229,16 +306,29 @@ To unmount the file system on a Mac you can use `umount`.
       --uid N              default UID
       --gid N              default GID
       --umask MASK         default umask
+      --read-only           mount read only
       --expiration N       default expiration for signed URL via xattrs (in
                            seconds, default is 30 days)
+      --requester-pays     requester pays for S3 interactions, the bucket must
+                           have Requester Pays enabled
+      --with-plugin-file FILE
+                           YAS3FSPlugin file
+      --with-plugin-class CLASS
+                           YAS3FSPlugin class, if this is not set it will 
+                           take the first child of YAS3FSPlugin from exception 
+                           handler file
       -l FILE, --log FILE  filename for logs
+      --log-mb-size N       max size of log file
+      --log-backup-count N  number of backups log files
+      --log-backup-gzip     flag to gzip backup files
+
       -f, --foreground     run in foreground
       -d, --debug          show debug info
       -V, --version        show program's version number and exit
 
 ### Signed URLs
 
-You can dinamically generate singed URLs for any file on yas3fs using Extended File attributes.
+You can dynamically generate signed URLs for any file on yas3fs using Extended File attributes.
 
 The default expiration is used (30 days or the value, in seconds, of the '--expiration' option).
 
@@ -267,27 +357,27 @@ Similarly on Linux you can use the 'getfattr' and 'setfattr' commands:
 
     $ getfattr -d -m yas3fs file
     # file: file
-    yas3fs.URL="http://bucket.s3.amazonaws.com/key"
-    yas3fs.bucket="S3 bucket"
-    yas3fs.expiration="2592000 (default)"
-    yas3fs.key="S3 key"
-    yas3fs.signedURL="https://bucket.s3.amazonaws.com/..." (for default expiration)
+    user.yas3fs.URL="http://bucket.s3.amazonaws.com/key"
+    user.yas3fs.bucket="S3 bucket"
+    user.yas3fs.expiration="2592000 (default)"
+    user.yas3fs.key="S3 key"
+    user.yas3fs.signedURL="https://bucket.s3.amazonaws.com/..." (for default expiration)
 
-    $ setfattr -n yas3fs.expiration -v 3600
+    $ setfattr -n user.yas3fs.expiration -v 3600
     $ getfattr -d -m yas3fs file
     # file: file
-    yas3fs.URL="http://bucket.s3.amazonaws.com/key"
-    yas3fs.bucket="S3 bucket"
-    yas3fs.expiration="3600"
-    yas3fs.key="S3 key"
-    yas3fs.signedURL="https://bucket.s3.amazonaws.com/..." (for 1h expiration)
+    user.yas3fs.URL="http://bucket.s3.amazonaws.com/key"
+    user.yas3fs.bucket="S3 bucket"
+    user.yas3fs.expiration="3600"
+    user.yas3fs.key="S3 key"
+    user.yas3fs.signedURL="https://bucket.s3.amazonaws.com/..." (for 1h expiration)
 
-    $ setfattr -x yas3fs.expiration latest.zip # File specific expiration removed, the default is used again
+    $ setfattr -x user.yas3fs.expiration latest.zip # File specific expiration removed, the default is used again
 
 ### Notification Syntax & Use
 
 You can use the SNS topic for other purposes than keeping the cache of the nodes in sync.
-Those are some sample use cases:
+These are some sample use cases:
 
 * You can listen to the SNS topic to be updated on changes on S3 (if done through yas3fs).
 * You can publish on the SNS topic to manage the overall "cluster" of yas3fs nodes.
@@ -306,7 +396,7 @@ The following `action`(s) are currently implemented:
 * `rename` (rename file or directory): `[ "node_id", "rename", "old_path", "new_path" ]`
 * `upload` (new or updated file): `[ "node_id", "upload", "path", "new_md5" ]` (`path` and `new_md5` are optional)
 * `md` (updated metadata, e.g. attr/xattr): `[ "node_id", "md", "path", "metadata_name" ]`
-* `reset` (reset cache): `[ "node_id", "reset" ]`
+* `reset` (reset cache): `[ "node_id", "reset", "path" ]` (`path` is optional)
 * `cache` (change cache config): `[ "node_id", "cache" , "entries" or "mem" or "disk", new_value ]`
 * `buffer` (change buffer config): `[ "node_id", "buffer", "size" or "prefetch", new_value ]`
 * `prefetch` (change prefetch config): `[ "node_id", "prefetch", "on" or "off" ]`
@@ -374,13 +464,89 @@ To the previous message all yas3fs instances will answer publishing a message on
 
     [ "id", "status", hostname, number of entries in cache, cache memory size,
       cache disk size, download queue length, prefetch queue length, S3 queue length ]
+      
+### Loading files into S3
+
+Have to load a massive amount of files into an S3 bucket that you intend to front though yas3fs? Check out [s3-bucket-loader](https://github.com/bitsofinfo/s3-bucket-loader) for massively parallel imports to S3.
 
 ### Testing
+
+Use this tool to test a YAS3FS install: [yas3fs-test](https://github.com/ewah/yas3fs-test)
+
+It will run through a slew of common commands on one or more nodes, adjust the settings.py file to what you imagine your production environment to look like.
+
+It is INVALUABLE for making changes to the yas3fs code base.
+
+More tests always being added.
+
 
 You can use this tool to test a YAS3FS cluster: [yas3fs-cluster-tester](https://github.com/bitsofinfo/yas3fs-cluster-tester)
 
 It is a test harness suite to induce file I/O and validate YAS3FS cluster activity across N peer-nodes.
 
-This may be useful to anyone who wants to validate/test YAS3FS to see how it behaves under load and with N peer's all managing files in the same S3 bucket. This has been used to test YAS3FS against a several node "cluster" with each node generating hundreds of files.
+This may be useful to anyone who wants to validate/test YAS3FS to see how it behaves under load and with N peers all managing files in the same S3 bucket. This has been used to test YAS3FS against a several node "cluster" with each node generating hundreds of files.
 
+### IAM Policy Permissions
+##### S3
+```JSON
+{
+  "Effect": "Allow",
+  "Action": [
+      "s3:GetBucketLocation",
+      "s3:DeleteObject",
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:ListBucket",
+      "s3:PutObject"
+  ],
+  "Resource": [
+      "arn:aws:s3:::bucketname",
+      "arn:aws:s3:::bucketname/*"
+  ]
+}
+```
+##### SNS
+```JSON
+{
+  "Effect": "Allow",
+  "Action": [
+      "sns:ConfirmSubscription",
+      "sns:GetTopicAttributes",
+      "sns:Publish",
+      "sns:Subscribe",
+      "sns:Unsubscribe"
+  ],
+  "Resource": [
+      "arn:aws:sns:region:acct:topicname"
+  ]
+}
+```
+##### SQS
+```JSON
+{
+  "Effect": "Allow",
+  "Action": [
+  	  "sqs:CreateQueue",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes",
+      "sqs:GetQueueUrl",
+      "sqs:ReceiveMessage",
+      "sqs:SetQueueAttributes",
+      "sqs:SendMessage"
+  ],
+  "Resource": [
+      "arn:aws:sqs:region:acct:queuename"
+  ]
+}
+```
+##### IAM
+```JSON
+{
+  "Effect": "Allow",
+  "Action": "iam:GetUser",
+  "Resource": [
+      "*"
+  ]
+}
+```
 Happy File Sharing!
